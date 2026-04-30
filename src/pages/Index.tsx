@@ -4,11 +4,11 @@ import { GuardianHeader } from "@/components/GuardianHeader";
 import { useSensorSimulation } from "@/hooks/useSensorSimulation";
 import { ChatTab } from "@/components/tabs/ChatTab";
 import { SensorsTab } from "@/components/tabs/SensorsTab";
-import { NewsTab } from "@/components/tabs/NewsTab";
 import { SettingsTab } from "@/components/tabs/SettingsTab";
 import { DashboardStrip } from "@/components/DashboardStrip";
 import { callFn } from "@/lib/api";
 import { useSettings } from "@/hooks/useSettings";
+import { loadSettings, saveSettings } from "@/lib/settings";
 
 interface Geo { city?: string; country?: string; lat?: number; lon?: number; }
 
@@ -18,8 +18,10 @@ const Index = () => {
   const [weatherCondition, setWeatherCondition] = useState<string | undefined>();
   const settings = useSettings();
 
-  // Send Telegram alert when a sensor triggers (filtered by user notification prefs + quiet hours).
+  // Send Telegram alert when a sensor triggers (filtered by user prefs + presence + quiet hours).
   const handleAlert = (a: any) => {
+    // Suppress motion/door alerts when owner is home (they're moving around themselves).
+    if (settings.presence === "home" && (a.sensor === "motion" || a.sensor === "door")) return;
     if (!settings.telegramChatId) return;
     const lvl = (a.level || "").toLowerCase() as "low" | "medium" | "high";
     if (!settings.notifyLevels[lvl]) return;
@@ -52,16 +54,23 @@ const Index = () => {
     <div className="min-h-screen flex w-full">
       <GuardianSidebar active={tab} onChange={setTab} />
       <div className="flex-1 flex flex-col min-w-0">
-        <GuardianHeader threat={threat} location={locationLabel} />
+        <GuardianHeader
+          threat={threat}
+          location={locationLabel}
+          presence={settings.presence}
+          onTogglePresence={() => {
+            const cur = loadSettings();
+            saveSettings({ ...cur, presence: cur.presence === "home" ? "away" : "home" });
+          }}
+        />
         <main className="flex-1 px-6 py-6 overflow-x-hidden">
           {tab === "chat" && (
             <div className="space-y-6 max-w-5xl mx-auto">
-              <ChatTab location={locationLabel} weatherCondition={weatherCondition} />
+              <ChatTab location={locationLabel} weatherCondition={weatherCondition} presence={settings.presence} />
               <DashboardStrip readings={readings} alerts={alerts} threat={threat} />
             </div>
           )}
           {tab === "sensors" && <SensorsTab readings={readings} alerts={alerts} trigger={trigger} />}
-          {tab === "news" && <NewsTab location={locationLabel} />}
           {tab === "settings" && <SettingsTab />}
         </main>
       </div>

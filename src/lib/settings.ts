@@ -15,6 +15,8 @@ export interface GuardianSettings {
   quietEnd: string;   // "07:00"
   // Appearance
   units: "metric" | "imperial";
+  // Presence — when "home", motion/door alerts are suppressed (owner is moving around)
+  presence: "home" | "away";
   // Telegram link (chatId stored after user runs /start with our shared bot)
   telegramChatId: string;
 }
@@ -30,6 +32,7 @@ const defaults: GuardianSettings = {
   quietStart: "22:00",
   quietEnd: "07:00",
   units: "metric",
+  presence: "home",
   telegramChatId: "",
 };
 

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { RotateCcw, Save, Send, MessageCircle, Trash2, ExternalLink } from "lucide-react";
+import { RotateCcw, Save, Send, MessageCircle, Trash2, ExternalLink, Home, LogOut } from "lucide-react";
 import { loadSettings, saveSettings, GuardianSettings, TELEGRAM_BOT_USERNAME } from "@/lib/settings";
 import { toast } from "sonner";
 import { callFn } from "@/lib/api";
@@ -78,6 +78,36 @@ export function SettingsTab() {
             </label>
           </div>
         </div>
+      </Card>
+
+      {/* PRESENCE */}
+      <Card className="panel p-6 space-y-4">
+        <div>
+          <h2 className="font-bold text-lg">📍 Presence Mode</h2>
+          <p className="text-sm text-muted-foreground">
+            When you're <strong>Home</strong>, motion and door alerts are silenced (so Guardian doesn't ping you for your own movement).
+            Switch to <strong>Away</strong> when you leave to enable full monitoring.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant={s.presence === "home" ? "default" : "outline"}
+            onClick={() => update("presence", "home")}
+            className="flex-1"
+          >
+            <Home className="h-4 w-4 mr-2" /> I'm Home
+          </Button>
+          <Button
+            variant={s.presence === "away" ? "default" : "outline"}
+            onClick={() => update("presence", "away")}
+            className="flex-1"
+          >
+            <LogOut className="h-4 w-4 mr-2" /> I'm Away
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Tip: you can toggle this from the top-right of any page, or send <span className="font-mono text-primary">/away</span> / <span className="font-mono text-primary">/home</span> to the Telegram bot.
+        </p>
       </Card>
 
       {/* NOTIFICATIONS */}

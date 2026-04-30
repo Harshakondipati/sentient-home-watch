@@ -119,7 +119,7 @@ async function handleUpdate(update: any, supa: any, tgApi: string, aiKey: string
   }
 
   if (text && text.trim().startsWith("/help")) {
-    await tgSend(tgApi, chatId, "💬 Just chat normally, or send a photo of any room to audit it. Use /reset to clear our conversation history.");
+    await tgSend(tgApi, chatId, "💬 Just chat normally, or send a photo of any room to audit it.\n\n• /reset — clear our conversation history\n\nTip: toggle <b>Home/Away</b> mode in the web app to silence motion/door alerts when you're home.");
     return;
   }
 

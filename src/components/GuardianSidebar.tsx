@@ -1,12 +1,11 @@
-import { Activity, MessageSquare, Newspaper, Settings, Shield } from "lucide-react";
+import { Activity, MessageSquare, Settings, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type TabKey = "chat" | "sensors" | "news" | "settings";
+export type TabKey = "chat" | "sensors" | "settings";
 
 const ITEMS: { key: TabKey; label: string; icon: any }[] = [
   { key: "chat", label: "Guardian", icon: MessageSquare },
   { key: "sensors", label: "Sensors", icon: Activity },
-  { key: "news", label: "News", icon: Newspaper },
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
