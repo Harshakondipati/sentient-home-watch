@@ -1,1 +1,19 @@
 project_id = "cogukzenxdnduvzehkmg"
+
+[functions.guardian-chat]
+verify_jwt = false
+
+[functions.guardian-vision]
+verify_jwt = false
+
+[functions.weather]
+verify_jwt = false
+
+[functions.safety-news]
+verify_jwt = false
+
+[functions.telegram-alert]
+verify_jwt = false
+
+[functions.geolocate]
+verify_jwt = false
