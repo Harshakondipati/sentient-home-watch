@@ -1,7 +1,11 @@
 // Guardian AI - Vision edge function
 // Sends an image (base64 data URL) to Gemini via Lovable AI Gateway for security analysis.
 // temperature 0.3 keeps the audit consistent and factual.
-import { corsHeaders } from "@supabase/supabase-js/cors";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
 const VISION_PROMPT = `Analyze this photo for home security issues. Look for: unlocked windows or doors, poor lighting, no door chain/deadbolt visible, exposed wires, valuables left visible, unsecured entry points, anything that could be a safety hazard.
 

@@ -1,7 +1,11 @@
 // Guardian AI - Chat edge function
 // Calls Lovable AI Gateway (google/gemini-2.5-flash) with full conversation history.
 // We use temperature 0.3 + top_p 0.85 for factual, consistent security advice.
-import { corsHeaders } from "@supabase/supabase-js/cors";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
 const SYSTEM_PROMPT = `You are Guardian, an expert home security AI assistant. You have deep knowledge of physical security, child safety, pet safety, intruder prevention, environmental hazards, and emergency response.
 
