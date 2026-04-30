@@ -90,6 +90,10 @@ export function useSensorSimulation(onThreshold?: (alert: SensorAlert) => void) 
   const lastValuesRef = useRef<Record<SensorKey, number>>({
     temperature: 22, smoke: 5, co: 2, flood: 0, motion: 0, door: 0,
   });
+  // Latch: once an alert fires for a sensor, don't re-fire until it returns to "safe" state.
+  const alertedRef = useRef<Record<SensorKey, boolean>>({
+    temperature: false, smoke: false, co: false, flood: false, motion: false, door: false,
+  });
   const onThresholdRef = useRef(onThreshold);
   onThresholdRef.current = onThreshold;
 
@@ -99,20 +103,26 @@ export function useSensorSimulation(onThreshold?: (alert: SensorAlert) => void) 
       return { ...prev, [k]: arr };
     });
 
-    const prevV = lastValuesRef.current[k];
     lastValuesRef.current[k] = value;
     const ev = evaluate(k, value);
-    if (ev.level && (k === "motion" || k === "door" || k === "flood" ? prevV < 1 : true)) {
-      const alert: SensorAlert = {
-        id: `${k}-${Date.now()}`,
-        ts: Date.now(),
-        sensor: k,
-        value,
-        level: ev.level,
-        message: ev.msg,
-      };
-      setAlerts((prev) => [alert, ...prev].slice(0, 50));
-      onThresholdRef.current?.(alert);
+    if (ev.level) {
+      // Only fire on rising edge (not already alerted)
+      if (!alertedRef.current[k]) {
+        alertedRef.current[k] = true;
+        const alert: SensorAlert = {
+          id: `${k}-${Date.now()}`,
+          ts: Date.now(),
+          sensor: k,
+          value,
+          level: ev.level,
+          message: ev.msg,
+        };
+        setAlerts((prev) => [alert, ...prev].slice(0, 50));
+        onThresholdRef.current?.(alert);
+      }
+    } else {
+      // Returned to safe — reset latch so next trigger will alert again
+      alertedRef.current[k] = false;
     }
   };
 
