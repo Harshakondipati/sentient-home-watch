@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Sparkline } from "@/components/Sparkline";
 import { SENSOR_LABELS, SENSOR_UNITS, SensorAlert, SensorKey, SensorState } from "@/hooks/useSensorSimulation";
 import { Activity, DoorOpen, Flame, Send, Thermometer, Wind, Waves, Zap } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { callFn } from "@/lib/api";
 import { toast } from "sonner";
 import { severityClass } from "@/lib/threat";
 import { useSettings } from "@/hooks/useSettings";
 
-const ICONS: Record<SensorKey, any> = {
+const ICONS: Record<SensorKey, LucideIcon> = {
   temperature: Thermometer, smoke: Flame, co: Wind, flood: Waves, motion: Activity, door: DoorOpen,
 };
 
@@ -43,7 +44,7 @@ export function SensorsTab({ readings, alerts, trigger }: Props) {
         message: "✅ <b>Guardian AI</b>\nTest alert — your Telegram is connected.",
       });
       toast.success("Telegram test sent!");
-    } catch (e: any) { toast.error(`Telegram: ${e.message}`); }
+    } catch (e) { toast.error(`Telegram: ${e instanceof Error ? e.message : "Failed to send test alert"}`); }
   };
 
   return (

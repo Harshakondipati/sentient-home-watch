@@ -7,16 +7,28 @@ import { callFn } from "@/lib/api";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { useSettings } from "@/hooks/useSettings";
+import { SENSOR_LABELS, SENSOR_UNITS, type SensorAlert, type SensorKey, type SensorState } from "@/hooks/useSensorSimulation";
+import type { ThreatLevel } from "@/lib/threat";
 
 type ImageAttachment = { dataUrl: string; name: string };
 type Msg = {
   role: "user" | "assistant";
   content: string;
-  image?: string; // dataURL for display
+  image?: string;
+};
+type VisionFinding = {
+  severity?: string;
+  issue?: string;
+  recommendation?: string;
+};
+type VisionAudit = {
+  risk_level?: string;
+  summary?: string;
+  findings?: VisionFinding[];
 };
 
 const QUICK_ACTIONS = [
-  { icon: Camera, label: "Audit a room", prompt: "I want to audit a room. I'll upload a photo of it next — please tell me what to capture (door, windows, locks visible)." },
+  { icon: Camera, label: "Audit a room", prompt: "I want to audit a room. I'll upload a photo of it next - please tell me what to capture (door, windows, locks visible)." },
   { icon: Dog, label: "Dog safety", prompt: "Help me make my home safer for my dog. Upload room photos and identify hazards (toxic plants, exposed wires, choking risks, escape points). Start by asking me about my dog." },
   { icon: Baby, label: "Baby-proofing", prompt: "Help me baby-proof my home. I'll send photos of each room. Identify outlets, sharp corners, choking hazards, fall risks. Start by asking my baby's age." },
   { icon: ListChecks, label: "Daily checklist", prompt: "Build me today's home security checklist based on my home profile and current weather." },
@@ -29,9 +41,12 @@ interface Props {
   location?: string;
   weatherCondition?: string;
   presence?: "home" | "away";
+  readings: SensorState;
+  alerts: SensorAlert[];
+  threat: ThreatLevel;
 }
 
-export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondition, presence }: Props) {
+export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondition, presence, readings, alerts, threat }: Props) {
   const settings = useSettings();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -53,62 +68,56 @@ export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondi
     setLoading(true);
 
     try {
-      // Build profile context for personalized advice
-      const profile = [
-        settings.homeName && `Home: ${settings.homeName}`,
-        settings.city && `City: ${settings.city}`,
-        location && `Detected location: ${location}`,
-        weatherCondition && `Today's weather: ${weatherCondition}`,
-        `Residents: ${settings.residents}`,
-        settings.hasKids && `Has children`,
-        settings.hasPets && `Has pets`,
-        `Owner is currently ${(presence ?? settings.presence).toUpperCase()}`,
-      ].filter(Boolean).join(" · ");
+      const homeContext = buildHomeContext({
+        settings,
+        location,
+        weatherCondition,
+        presence: presence ?? settings.presence,
+        readings,
+        alerts,
+        threat,
+        messages,
+      });
 
-      // For vision: route through guardian-vision; for text: guardian-chat
       if (image) {
-        // First message with image triggers structured audit + free-form follow-up
-        const auditR = await callFn<{ audit: any; raw: string }>("guardian-vision", {
+        const auditR = await callFn<{ audit?: VisionAudit; raw?: string }>("guardian-vision", {
           imageDataUrl: image.dataUrl,
         });
         const a = auditR.audit;
-        const findings = (a?.findings ?? []).map((f: any, i: number) =>
-          `${i + 1}. **${f.severity || "Medium"} – ${f.issue}**\n   → ${f.recommendation}`
+        const findings = (a?.findings ?? []).map((f, i) =>
+          `${i + 1}. **${f.severity || "Medium"} - ${f.issue ?? "Issue"}**\n   - ${f.recommendation ?? "Review this area."}`
         ).join("\n");
         const checklist = (a?.findings ?? [])
-          .filter((f: any) => (f.severity || "").toLowerCase() !== "low")
-          .map((f: any) => `- [ ] ${f.recommendation}`)
+          .filter((f) => (f.severity || "").toLowerCase() !== "low")
+          .map((f) => `- [ ] ${f.recommendation ?? "Review this area."}`)
           .join("\n");
 
         const reply = [
-          `### 🔍 Photo Audit – Risk: **${a?.risk_level || "Medium"}**`,
+          `### Photo Audit - Risk: **${a?.risk_level || "Medium"}**`,
           a?.summary || "",
           findings ? `\n**Findings:**\n${findings}` : "",
           checklist ? `\n**Your action checklist:**\n${checklist}` : "",
-          text ? `\n*You also asked: "${text}"* — ask me follow-ups about this room and I'll guide you.` : `\nAsk me follow-up questions about this room, or upload another photo of a different area.`,
+          text ? `\n*You also asked: "${text}"* - ask me follow-ups about this room and I'll guide you.` : "\nAsk me follow-up questions about this room, or upload another photo of a different area.",
         ].filter(Boolean).join("\n");
 
         setMessages((p) => [...p, { role: "assistant", content: reply }]);
       } else {
-        const sysExtra = profile ? `User profile: ${profile}.` : "";
         const r = await callFn<{ content: string }>("guardian-chat", {
-          messages: [
-            ...(sysExtra ? [{ role: "system" as const, content: sysExtra }] : []),
-            ...next.map((m) => ({ role: m.role, content: m.content })),
-          ],
+          messages: next.map((m) => ({ role: m.role, content: m.content })),
           location,
+          homeContext,
         });
         setMessages((p) => [...p, { role: "assistant", content: r.content || "(no response)" }]);
       }
-    } catch (e: any) {
-      toast.error(e.message);
-      setMessages((p) => [...p, { role: "assistant", content: `⚠️ ${e.message}` }]);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Guardian request failed";
+      toast.error(message);
+      setMessages((p) => [...p, { role: "assistant", content: `Warning: ${message}` }]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle preset prompt from quick actions / external
   useEffect(() => {
     if (presetPrompt) {
       sendMessage(presetPrompt);
@@ -134,7 +143,7 @@ export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondi
   };
 
   return (
-    <Card className="panel p-0 flex flex-col h-[calc(100vh-9rem)]">
+    <Card className="panel p-0 flex flex-col h-[calc(100vh-10rem)] sm:h-[calc(100vh-9rem)]">
       <div className="flex items-center justify-between px-5 py-3 border-b">
         <div className="flex items-center gap-2">
           <Shield className="h-5 w-5 text-primary" />
@@ -153,7 +162,7 @@ export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondi
             <p className="text-sm text-muted-foreground mb-6 max-w-md">
               Ask me anything about home safety, or upload a photo of any room and I'll audit it for risks.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-w-2xl w-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-w-2xl w-full">
               {QUICK_ACTIONS.map((q) => {
                 const Icon = q.icon;
                 return (
@@ -178,7 +187,7 @@ export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondi
                 <Shield className="h-4 w-4 text-primary" />
               </div>
             )}
-            <div className={`max-w-[78%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}>
+            <div className={`max-w-[86%] sm:max-w-[78%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}>
               {m.image && (
                 <img src={m.image} alt="upload" className="rounded-lg mb-2 max-h-64 w-auto" />
               )}
@@ -245,7 +254,7 @@ export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondi
           <ImageIcon className="h-4 w-4" />
         </Button>
         <Input
-          placeholder={pendingImage ? "Add a note (optional)…" : "Ask Guardian, or upload a photo to audit a room…"}
+          placeholder={pendingImage ? "Add a note (optional)..." : "Ask Guardian, or upload a photo to audit a room..."}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={loading}
@@ -256,4 +265,63 @@ export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondi
       </form>
     </Card>
   );
+}
+
+function buildHomeContext({
+  settings,
+  location,
+  weatherCondition,
+  presence,
+  readings,
+  alerts,
+  threat,
+  messages,
+}: {
+  settings: ReturnType<typeof useSettings>;
+  location?: string;
+  weatherCondition?: string;
+  presence: "home" | "away";
+  readings: SensorState;
+  alerts: SensorAlert[];
+  threat: ThreatLevel;
+  messages: Msg[];
+}) {
+  const sensorSnapshot = (Object.keys(SENSOR_LABELS) as SensorKey[]).map((key) => {
+    const history = readings[key] ?? [];
+    const last = history[history.length - 1];
+    return {
+      sensor: key,
+      label: SENSOR_LABELS[key],
+      value: last?.value ?? null,
+      unit: SENSOR_UNITS[key],
+      sampledAt: last?.ts ? new Date(last.ts).toISOString() : null,
+      recentValues: history.slice(-8).map((reading) => reading.value),
+    };
+  });
+
+  return {
+    profile: {
+      homeName: settings.homeName,
+      city: settings.city || location || null,
+      residents: settings.residents,
+      hasKids: settings.hasKids,
+      hasPets: settings.hasPets,
+      presence,
+      weatherCondition: weatherCondition || null,
+    },
+    threat,
+    sensors: sensorSnapshot,
+    recentAlerts: alerts.slice(0, 10).map((alert) => ({
+      sensor: alert.sensor,
+      label: SENSOR_LABELS[alert.sensor],
+      value: alert.value,
+      level: alert.level,
+      message: alert.message,
+      time: new Date(alert.ts).toISOString(),
+    })),
+    recentPhotoAudits: messages
+      .filter((message) => message.role === "assistant" && message.content.includes("Photo Audit"))
+      .slice(-3)
+      .map((message) => message.content),
+  };
 }

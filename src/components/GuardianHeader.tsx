@@ -21,17 +21,17 @@ export function GuardianHeader({ threat, location, presence, onTogglePresence }:
   const isHome = presence === "home";
 
   return (
-    <header className="sticky top-0 z-30 panel border-b backdrop-blur-md bg-card/70 px-6 py-3 flex items-center justify-between">
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-30 panel border-b backdrop-blur-md bg-card/70 px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         <Shield className="h-5 w-5 text-primary" />
-        <div>
+        <div className="min-w-0">
           <h1 className="font-bold text-lg leading-none">Guardian AI</h1>
-          <div className="text-[10px] text-muted-foreground font-mono mt-1 tracking-wider">
+          <div className="text-[10px] text-muted-foreground font-mono mt-1 tracking-wider truncate">
             HOME SECURITY ASSISTANT {location ? `· ${location.toUpperCase()}` : ""}
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         <Button
           size="sm"
           variant={isHome ? "default" : "outline"}

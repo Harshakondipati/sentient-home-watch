@@ -1,5 +1,5 @@
-// Guardian AI - Weather edge function
-// Fetches current weather from OpenWeatherMap and asks Gemini for a security tip.
+import { generateGeminiText } from "../_shared/gemini.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -11,9 +11,10 @@ Deno.serve(async (req) => {
 
   try {
     const OPENWEATHER_API_KEY = Deno.env.get("OPENWEATHER_API_KEY");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 
     const { city, country, lat, lon } = await req.json().catch(() => ({}));
+    if (!OPENWEATHER_API_KEY) return json({ error: "Weather API key not configured" }, 500);
 
     let weatherUrl: string;
     if (typeof lat === "number" && typeof lon === "number") {
@@ -22,26 +23,13 @@ Deno.serve(async (req) => {
       const q = country ? `${city},${country}` : city;
       weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(q)}&units=metric&appid=${OPENWEATHER_API_KEY}`;
     } else {
-      return new Response(JSON.stringify({ error: "Provide city or lat/lon" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (!OPENWEATHER_API_KEY) {
-      return new Response(JSON.stringify({ error: "Weather API key not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Provide city or lat/lon" }, 400);
     }
 
     const wResp = await fetch(weatherUrl);
-    if (!wResp.ok) {
-      const t = await wResp.text();
-      return new Response(JSON.stringify({ error: `Weather API error (${wResp.status}): ${t}` }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const w = await wResp.json();
+    if (!wResp.ok) return json({ error: `Weather API error (${wResp.status}): ${await wResp.text()}` }, 502);
 
+    const w = await wResp.json();
     const weather = {
       city: w.name,
       country: w.sys?.country,
@@ -54,37 +42,34 @@ Deno.serve(async (req) => {
       icon: w.weather?.[0]?.icon,
     };
 
-    // Ask Gemini for a security tip based on weather
     let tip = "";
-    if (LOVABLE_API_KEY) {
+    if (GEMINI_API_KEY) {
       try {
-        const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash-lite",
-            messages: [
-              { role: "system", content: "You are Guardian, a home security AI." },
-              { role: "user", content: `Weather: ${weather.condition} (${weather.description}), ${weather.temp}°C, wind ${weather.wind_speed} m/s in ${weather.city}. Give ONE concise home-security tip (max 2 sentences) tied to this weather.` },
-            ],
-            temperature: 0.4,
-            max_tokens: 120,
-          }),
+        tip = await generateGeminiText({
+          apiKey: GEMINI_API_KEY,
+          model: "gemini-2.5-flash-lite",
+          system: "You are Guardian, a home security AI.",
+          messages: [
+            { role: "user", content: `Weather: ${weather.condition} (${weather.description}), ${weather.temp} C, wind ${weather.wind_speed} m/s in ${weather.city}. Give ONE concise home-security tip (max 2 sentences) tied to this weather.` },
+          ],
+          temperature: 0.4,
+          maxOutputTokens: 120,
         });
-        if (aiResp.ok) {
-          const d = await aiResp.json();
-          tip = d?.choices?.[0]?.message?.content ?? "";
-        }
-      } catch (e) { console.error("weather tip error:", e); }
+      } catch (e) {
+        console.error("weather tip error:", e);
+      }
     }
 
-    return new Response(JSON.stringify({ weather, tip }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ weather, tip });
   } catch (e) {
     console.error("weather error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
   }
 });
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}

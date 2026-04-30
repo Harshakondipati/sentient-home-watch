@@ -3,9 +3,10 @@ import { ThreatBadge } from "@/components/ThreatBadge";
 import { Sparkline } from "@/components/Sparkline";
 import { SENSOR_LABELS, SENSOR_UNITS, SensorAlert, SensorKey, SensorState } from "@/hooks/useSensorSimulation";
 import { Activity, DoorOpen, Flame, Thermometer, Wind, Waves } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { ThreatLevel, severityClass } from "@/lib/threat";
 
-const ICONS: Record<SensorKey, any> = {
+const ICONS: Record<SensorKey, LucideIcon> = {
   temperature: Thermometer, smoke: Flame, co: Wind, flood: Waves, motion: Activity, door: DoorOpen,
 };
 

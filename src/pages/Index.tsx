@@ -11,6 +11,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { loadSettings, saveSettings } from "@/lib/settings";
 
 interface Geo { city?: string; country?: string; lat?: number; lon?: number; }
+interface WeatherResponse { weather?: { description?: string } }
 
 const Index = () => {
   const [tab, setTab] = useState<TabKey>("chat");
@@ -19,7 +20,7 @@ const Index = () => {
   const settings = useSettings();
 
   // Send Telegram alert when a sensor triggers (filtered by user prefs + presence + quiet hours).
-  const handleAlert = (a: any) => {
+  const handleAlert = (a: import("@/hooks/useSensorSimulation").SensorAlert) => {
     // Suppress motion/door alerts when owner is home (they're moving around themselves).
     if (settings.presence === "home" && (a.sensor === "motion" || a.sensor === "door")) return;
     if (!settings.telegramChatId) return;
@@ -43,7 +44,7 @@ const Index = () => {
   // Fetch weather once we have coords
   useEffect(() => {
     if (!geo.lat || !geo.lon) return;
-    callFn<{ weather: any }>("weather", { lat: geo.lat, lon: geo.lon })
+    callFn<WeatherResponse>("weather", { lat: geo.lat, lon: geo.lon })
       .then((d) => setWeatherCondition(d.weather?.description))
       .catch(() => {});
   }, [geo.lat, geo.lon]);
@@ -63,10 +64,17 @@ const Index = () => {
             saveSettings({ ...cur, presence: cur.presence === "home" ? "away" : "home" });
           }}
         />
-        <main className="flex-1 px-6 py-6 overflow-x-hidden">
+        <main className="flex-1 px-3 sm:px-6 py-4 sm:py-6 overflow-x-hidden">
           {tab === "chat" && (
             <div className="space-y-6 max-w-5xl mx-auto">
-              <ChatTab location={locationLabel} weatherCondition={weatherCondition} presence={settings.presence} />
+              <ChatTab
+                location={locationLabel}
+                weatherCondition={weatherCondition}
+                presence={settings.presence}
+                readings={readings}
+                alerts={alerts}
+                threat={threat}
+              />
               <DashboardStrip readings={readings} alerts={alerts} threat={threat} />
             </div>
           )}

@@ -42,7 +42,7 @@ export function SettingsTab() {
         message: `✅ <b>Guardian AI</b>\nTelegram is connected. You'll receive alerts here.`,
       });
       toast.success("Test message sent to Telegram!");
-    } catch (e: any) { toast.error(e.message); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to send Telegram test"); }
   };
 
   return (
