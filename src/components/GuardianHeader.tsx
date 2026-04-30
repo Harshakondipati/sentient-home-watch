@@ -1,14 +1,24 @@
 import { useEffect, useState } from "react";
 import { ThreatBadge } from "./ThreatBadge";
 import { ThreatLevel } from "@/lib/threat";
-import { Shield } from "lucide-react";
+import { Shield, Home, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-export function GuardianHeader({ threat, location }: { threat: ThreatLevel; location?: string }) {
+interface Props {
+  threat: ThreatLevel;
+  location?: string;
+  presence: "home" | "away";
+  onTogglePresence: () => void;
+}
+
+export function GuardianHeader({ threat, location, presence, onTogglePresence }: Props) {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  const isHome = presence === "home";
 
   return (
     <header className="sticky top-0 z-30 panel border-b backdrop-blur-md bg-card/70 px-6 py-3 flex items-center justify-between">
@@ -21,9 +31,19 @@ export function GuardianHeader({ threat, location }: { threat: ThreatLevel; loca
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        <Button
+          size="sm"
+          variant={isHome ? "default" : "outline"}
+          onClick={onTogglePresence}
+          className={isHome ? "" : "border-warning/50 text-warning hover:text-warning"}
+          title={isHome ? "You're home — motion/door alerts suppressed" : "You're away — full monitoring active"}
+        >
+          {isHome ? <Home className="h-4 w-4 mr-1.5" /> : <LogOut className="h-4 w-4 mr-1.5" />}
+          {isHome ? "Home" : "Away"}
+        </Button>
         <ThreatBadge level={threat} />
-        <div className="font-mono text-sm text-muted-foreground tabular-nums">
+        <div className="font-mono text-sm text-muted-foreground tabular-nums hidden sm:block">
           {now.toLocaleTimeString()}
         </div>
       </div>

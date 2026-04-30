@@ -28,9 +28,10 @@ interface Props {
   onPresetConsumed?: () => void;
   location?: string;
   weatherCondition?: string;
+  presence?: "home" | "away";
 }
 
-export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondition }: Props) {
+export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondition, presence }: Props) {
   const settings = useSettings();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
