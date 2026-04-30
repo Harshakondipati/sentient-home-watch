@@ -6,15 +6,20 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const VISION_PROMPT = `Analyze this photo for home security issues. Look for unlocked windows or doors, poor lighting, missing door chain/deadbolt, exposed wires, visible valuables, unsecured entry points, and safety hazards.
+const VISION_PROMPT = `Analyze this photo for home security issues. Look for unlocked windows or doors, poor lighting, missing door chain/deadbolt, exposed wires, visible valuables, unsecured entry points, fire/electrical risks, child or pet hazards, trip/fall hazards, and anything that affects emergency readiness.
 
 Return STRICT JSON ONLY with this exact shape, no markdown and no fences:
 {
   "risk_level": "Low" | "Medium" | "High",
-  "summary": "one sentence overview",
+  "summary": "2-3 sentence overview of the room's safety posture",
+  "visible_observations": ["specific thing visible in the image", "..."],
+  "positive_signals": ["what looks safe or well maintained", "..."],
   "findings": [
-    { "issue": "...", "severity": "Low" | "Medium" | "High", "recommendation": "..." }
-  ]
+    { "area": "Door / Windows / Electrical / Visibility / General", "issue": "...", "severity": "Low" | "Medium" | "High", "recommendation": "...", "why_it_matters": "..." }
+  ],
+  "priority_actions": ["highest priority action", "..."],
+  "follow_up_checks": ["what the user should inspect manually because it is not visible", "..."],
+  "confidence": "Low" | "Medium" | "High"
 }`;
 
 Deno.serve(async (req) => {
@@ -56,14 +61,7 @@ Deno.serve(async (req) => {
 
     if (followUp) return json({ content });
 
-    let audit: unknown = null;
-    try {
-      const cleaned = content.trim().replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
-      const match = cleaned.match(/\{[\s\S]*\}/);
-      audit = JSON.parse(match ? match[0] : cleaned);
-    } catch {
-      audit = { risk_level: "Medium", summary: content.slice(0, 200), findings: [] };
-    }
+    const audit = parseAudit(content);
 
     return json({ audit, raw: content });
   } catch (e) {
@@ -77,4 +75,99 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function parseAudit(content: string) {
+  const cleaned = stripMarkdownFence(content);
+  const candidates = [
+    cleaned,
+    extractJsonObject(cleaned),
+    stripMarkdownFence(unquoteJsonString(cleaned)),
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      return normalizeAudit(parsed);
+    } catch {
+      // Try next representation.
+    }
+  }
+
+  return normalizeAudit({
+    risk_level: inferRiskLevel(cleaned),
+    summary: cleaned.replace(/\s+/g, " ").slice(0, 600),
+    visible_observations: [],
+    positive_signals: [],
+    findings: [],
+    priority_actions: ["Review the image manually; the AI response could not be parsed into a structured audit."],
+    follow_up_checks: ["Check door/window lock status, electrical outlets, smoke/CO detector placement, and escape path clearance."],
+    confidence: "Low",
+  });
+}
+
+function normalizeAudit(raw: any) {
+  const findings = Array.isArray(raw?.findings) ? raw.findings : [];
+  return {
+    risk_level: normalizeRisk(raw?.risk_level),
+    summary: typeof raw?.summary === "string" ? raw.summary : "Audit completed. Review the sections below for visible risks and follow-up checks.",
+    visible_observations: toStringArray(raw?.visible_observations),
+    positive_signals: toStringArray(raw?.positive_signals),
+    findings: findings.map((finding: any) => ({
+      area: typeof finding?.area === "string" ? finding.area : "General",
+      issue: typeof finding?.issue === "string" ? finding.issue : "Potential safety concern",
+      severity: normalizeRisk(finding?.severity),
+      recommendation: typeof finding?.recommendation === "string" ? finding.recommendation : "Inspect this area more closely.",
+      why_it_matters: typeof finding?.why_it_matters === "string" ? finding.why_it_matters : "This may affect home safety or emergency readiness.",
+    })),
+    priority_actions: toStringArray(raw?.priority_actions),
+    follow_up_checks: toStringArray(raw?.follow_up_checks),
+    confidence: normalizeConfidence(raw?.confidence),
+  };
+}
+
+function stripMarkdownFence(value: string) {
+  return value
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+function unquoteJsonString(value: string) {
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === "string" ? parsed : value;
+  } catch {
+    return value;
+  }
+}
+
+function extractJsonObject(value: string) {
+  const start = value.indexOf("{");
+  const end = value.lastIndexOf("}");
+  return start >= 0 && end > start ? value.slice(start, end + 1) : "";
+}
+
+function toStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+}
+
+function normalizeRisk(value: unknown) {
+  const normalized = typeof value === "string" ? value.toLowerCase() : "";
+  if (normalized === "high") return "High";
+  if (normalized === "low") return "Low";
+  return "Medium";
+}
+
+function normalizeConfidence(value: unknown) {
+  const normalized = typeof value === "string" ? value.toLowerCase() : "";
+  if (normalized === "high") return "High";
+  if (normalized === "low") return "Low";
+  return "Medium";
+}
+
+function inferRiskLevel(value: string) {
+  const match = value.match(/"risk_level"\s*:\s*"([^"]+)"/i);
+  return normalizeRisk(match?.[1]);
 }

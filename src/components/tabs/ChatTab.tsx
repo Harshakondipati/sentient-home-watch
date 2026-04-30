@@ -17,14 +17,21 @@ type Msg = {
   image?: string;
 };
 type VisionFinding = {
+  area?: string;
   severity?: string;
   issue?: string;
   recommendation?: string;
+  why_it_matters?: string;
 };
 type VisionAudit = {
   risk_level?: string;
   summary?: string;
+  visible_observations?: string[];
+  positive_signals?: string[];
   findings?: VisionFinding[];
+  priority_actions?: string[];
+  follow_up_checks?: string[];
+  confidence?: string;
 };
 
 const QUICK_ACTIONS = [
@@ -84,21 +91,7 @@ export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondi
           imageDataUrl: image.dataUrl,
         });
         const a = auditR.audit;
-        const findings = (a?.findings ?? []).map((f, i) =>
-          `${i + 1}. **${f.severity || "Medium"} - ${f.issue ?? "Issue"}**\n   - ${f.recommendation ?? "Review this area."}`
-        ).join("\n");
-        const checklist = (a?.findings ?? [])
-          .filter((f) => (f.severity || "").toLowerCase() !== "low")
-          .map((f) => `- [ ] ${f.recommendation ?? "Review this area."}`)
-          .join("\n");
-
-        const reply = [
-          `### Photo Audit - Risk: **${a?.risk_level || "Medium"}**`,
-          a?.summary || "",
-          findings ? `\n**Findings:**\n${findings}` : "",
-          checklist ? `\n**Your action checklist:**\n${checklist}` : "",
-          text ? `\n*You also asked: "${text}"* - ask me follow-ups about this room and I'll guide you.` : "\nAsk me follow-up questions about this room, or upload another photo of a different area.",
-        ].filter(Boolean).join("\n");
+        const reply = formatPhotoAudit(a, text);
 
         setMessages((p) => [...p, { role: "assistant", content: reply }]);
       } else {
@@ -265,6 +258,37 @@ export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondi
       </form>
     </Card>
   );
+}
+
+function formatPhotoAudit(a: VisionAudit | undefined, text?: string) {
+  const risk = a?.risk_level || "Medium";
+  const findings = a?.findings ?? [];
+  const highPriorityFindings = findings.filter((f) => (f.severity || "").toLowerCase() !== "low");
+  const priorityActions = (a?.priority_actions?.length ? a.priority_actions : highPriorityFindings.map((f) => f.recommendation)).filter(Boolean) as string[];
+
+  return [
+    `### Photo Audit - Risk: **${risk}**`,
+    a?.summary || "I reviewed the photo for visible home-security and safety concerns. Use the sections below to act on what is visible and manually check anything the image cannot confirm.",
+    renderList("What I can see", a?.visible_observations),
+    renderList("What looks okay", a?.positive_signals),
+    findings.length
+      ? `\n**Findings:**\n${findings.map((f, i) => [
+          `${i + 1}. **${f.severity || "Medium"} - ${f.area || "General"}: ${f.issue || "Potential concern"}**`,
+          `   - **Why it matters:** ${f.why_it_matters || "This can affect home safety or emergency readiness."}`,
+          `   - **Recommendation:** ${f.recommendation || "Inspect this area more closely."}`,
+        ].join("\n")).join("\n")}`
+      : "\n**Findings:**\nNo clear visible hazards were detected in the photo, but hidden risks may still exist.",
+    renderList("Priority actions", priorityActions),
+    renderList("Follow-up checks", a?.follow_up_checks),
+    `\n**Confidence:** ${a?.confidence || "Medium"} - based only on what is visible in the uploaded image.`,
+    text ? `\n*You also asked: "${text}". Ask a follow-up or upload another angle if you want a deeper check.*` : "\nAsk a follow-up or upload another angle if you want a deeper check.",
+  ].filter(Boolean).join("\n");
+}
+
+function renderList(title: string, items?: string[]) {
+  const filtered = items?.filter((item) => item.trim().length > 0) ?? [];
+  if (!filtered.length) return "";
+  return `\n**${title}:**\n${filtered.map((item) => `- ${item}`).join("\n")}`;
 }
 
 function buildHomeContext({
