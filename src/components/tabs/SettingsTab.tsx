@@ -78,6 +78,7 @@ export function SettingsTab() {
             </label>
           </div>
         </div>
+      </Card>
 
       {/* PRESENCE */}
       <Card className="panel p-6 space-y-4">
