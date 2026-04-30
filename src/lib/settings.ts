@@ -32,6 +32,7 @@ const defaults: GuardianSettings = {
   quietStart: "22:00",
   quietEnd: "07:00",
   units: "metric",
+  presence: "home",
   telegramChatId: "",
 };
 
