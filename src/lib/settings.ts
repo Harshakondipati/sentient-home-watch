@@ -1,18 +1,36 @@
-// Settings stored in localStorage (Telegram credentials + AI generation params)
-const KEY = "guardian_settings_v1";
+// User-facing settings stored in localStorage (no server, no auth).
+const KEY = "guardian_settings_v2";
 
 export interface GuardianSettings {
-  telegramBotToken: string;
+  // Home profile
+  homeName: string;
+  city: string;
+  residents: number;
+  hasKids: boolean;
+  hasPets: boolean;
+  // Notification prefs
+  notifyLevels: { low: boolean; medium: boolean; high: boolean };
+  quietHoursEnabled: boolean;
+  quietStart: string; // "22:00"
+  quietEnd: string;   // "07:00"
+  // Appearance
+  units: "metric" | "imperial";
+  // Telegram link (chatId stored after user runs /start with our shared bot)
   telegramChatId: string;
-  temperature: number;
-  topP: number;
 }
 
 const defaults: GuardianSettings = {
-  telegramBotToken: "",
+  homeName: "My Home",
+  city: "",
+  residents: 1,
+  hasKids: false,
+  hasPets: false,
+  notifyLevels: { low: false, medium: true, high: true },
+  quietHoursEnabled: false,
+  quietStart: "22:00",
+  quietEnd: "07:00",
+  units: "metric",
   telegramChatId: "",
-  temperature: 0.3,
-  topP: 0.85,
 };
 
 export function loadSettings(): GuardianSettings {
@@ -29,3 +47,6 @@ export function saveSettings(s: GuardianSettings) {
   localStorage.setItem(KEY, JSON.stringify(s));
   window.dispatchEvent(new CustomEvent("guardian-settings-changed"));
 }
+
+// Public bot username (safe to expose)
+export const TELEGRAM_BOT_USERNAME = "guardiannaibot";
