@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { RotateCcw, Save, Send, MessageCircle, Trash2, ExternalLink } from "lucide-react";
+import { RotateCcw, Save, Send, MessageCircle, Trash2, ExternalLink, Home, LogOut } from "lucide-react";
 import { loadSettings, saveSettings, GuardianSettings, TELEGRAM_BOT_USERNAME } from "@/lib/settings";
 import { toast } from "sonner";
 import { callFn } from "@/lib/api";
