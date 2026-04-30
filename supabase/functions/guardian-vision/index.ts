@@ -66,7 +66,11 @@ Deno.serve(async (req) => {
     return json({ audit, raw: content });
   } catch (e) {
     console.error("guardian-vision error:", e);
-    return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
+    const message = e instanceof Error ? e.message : "Unknown error";
+    if (message.includes("Gemini API error")) {
+      return json({ audit: buildProviderUnavailableAudit(message), raw: "" });
+    }
+    return json({ error: message }, 500);
   }
 });
 
@@ -170,4 +174,50 @@ function normalizeConfidence(value: unknown) {
 function inferRiskLevel(value: string) {
   const match = value.match(/"risk_level"\s*:\s*"([^"]+)"/i);
   return normalizeRisk(match?.[1]);
+}
+
+function buildProviderUnavailableAudit(message: string) {
+  const isQuota = message.includes("(429)");
+  const isUnavailable = message.includes("(503)");
+  const summary = isQuota
+    ? "I could not complete the photo audit because the configured Gemini API key has hit its current quota or rate limit. The image was received, but Guardian needs an active Gemini quota to inspect the room visually."
+    : isUnavailable
+      ? "I could not complete the photo audit because Gemini reported temporary high demand. The image was received, but the AI model was unavailable at the moment of analysis."
+      : "I could not complete the photo audit because the AI vision provider returned an error. The image was received, but Guardian could not inspect it visually.";
+
+  return normalizeAudit({
+    risk_level: "Medium",
+    summary,
+    visible_observations: [
+      "The image upload reached the Guardian vision backend.",
+      "A visual security audit could not be generated until Gemini accepts the request.",
+    ],
+    positive_signals: [
+      "The app, Supabase function, and image upload path are responding.",
+      "The failure is isolated to the external Gemini model/quota response.",
+    ],
+    findings: [
+      {
+        area: "AI Provider",
+        issue: isQuota ? "Gemini quota or rate limit exceeded" : "Gemini model temporarily unavailable",
+        severity: "Medium",
+        recommendation: isQuota
+          ? "Use a Gemini key with available quota or enable billing/increase quota for the current key."
+          : "Try again after a short wait; if it repeats, switch to a Gemini key with stable quota.",
+        why_it_matters: "Photo audit depends on Gemini vision. Without a successful model response, Guardian cannot identify room-specific hazards.",
+      },
+    ],
+    priority_actions: [
+      isQuota
+        ? "Check the Gemini API quota/billing status for the configured key."
+        : "Retry the photo audit after a short wait.",
+      "After quota is available, upload the photo again to get room-specific observations and recommendations.",
+    ],
+    follow_up_checks: [
+      "Manually check door and window locks.",
+      "Look for exposed wires, overloaded outlets, blocked exits, valuables visible from outside, and missing smoke/CO detectors.",
+      "Upload another angle once Gemini quota is available.",
+    ],
+    confidence: "Low",
+  });
 }
