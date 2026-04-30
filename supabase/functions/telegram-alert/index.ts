@@ -1,7 +1,11 @@
 // Guardian AI - Telegram alert proxy
 // Sends a message to a Telegram bot using credentials supplied by the client (saved in Settings).
 // We accept the bot token + chat_id from the client because user provides them in-app.
-import { corsHeaders } from "@supabase/supabase-js/cors";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
