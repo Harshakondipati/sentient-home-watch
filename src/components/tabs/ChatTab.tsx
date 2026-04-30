@@ -62,6 +62,7 @@ export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondi
         `Residents: ${settings.residents}`,
         settings.hasKids && `Has children`,
         settings.hasPets && `Has pets`,
+        presence && `Owner is currently ${presence.toUpperCase()}`,
       ].filter(Boolean).join(" · ");
 
       // For vision: route through guardian-vision; for text: guardian-chat
