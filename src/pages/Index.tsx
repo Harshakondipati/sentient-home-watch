@@ -54,16 +54,23 @@ const Index = () => {
     <div className="min-h-screen flex w-full">
       <GuardianSidebar active={tab} onChange={setTab} />
       <div className="flex-1 flex flex-col min-w-0">
-        <GuardianHeader threat={threat} location={locationLabel} />
+        <GuardianHeader
+          threat={threat}
+          location={locationLabel}
+          presence={settings.presence}
+          onTogglePresence={() => {
+            const cur = loadSettings();
+            saveSettings({ ...cur, presence: cur.presence === "home" ? "away" : "home" });
+          }}
+        />
         <main className="flex-1 px-6 py-6 overflow-x-hidden">
           {tab === "chat" && (
             <div className="space-y-6 max-w-5xl mx-auto">
-              <ChatTab location={locationLabel} weatherCondition={weatherCondition} />
+              <ChatTab location={locationLabel} weatherCondition={weatherCondition} presence={settings.presence} />
               <DashboardStrip readings={readings} alerts={alerts} threat={threat} />
             </div>
           )}
           {tab === "sensors" && <SensorsTab readings={readings} alerts={alerts} trigger={trigger} />}
-          {tab === "news" && <NewsTab location={locationLabel} />}
           {tab === "settings" && <SettingsTab />}
         </main>
       </div>
