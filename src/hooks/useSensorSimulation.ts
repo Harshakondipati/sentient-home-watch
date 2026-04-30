@@ -130,12 +130,14 @@ export function useSensorSimulation(onThreshold?: (alert: SensorAlert) => void) 
   useEffect(() => {
     const id = setInterval(() => {
       const cur = lastValuesRef.current;
-      pushReading("temperature", clamp(cur.temperature + rand(-0.5, 0.5), -5, 50));
-      pushReading("smoke", clamp(cur.smoke + rand(-2, 2), 0, 100));
-      pushReading("co", clamp(cur.co + rand(-1, 1), 0, 60));
-      // Binary sensors slowly decay back to 0
-      pushReading("flood", cur.flood > 0 ? (Math.random() < 0.3 ? 0 : 1) : 0);
-      pushReading("motion", cur.motion > 0 ? 0 : (Math.random() < 0.05 ? 1 : 0));
+      // Temp drifts toward 22°C; gases drift down toward baseline so triggered spikes recover.
+      pushReading("temperature", clamp(cur.temperature + (22 - cur.temperature) * 0.1 + rand(-0.3, 0.3), -5, 50));
+      pushReading("smoke", clamp(cur.smoke * 0.85 + rand(-1, 1), 0, 100));
+      pushReading("co", clamp(cur.co * 0.85 + rand(-0.5, 0.5), 0, 60));
+      // Motion auto-clears after one tick; no random firing.
+      pushReading("motion", cur.motion > 0 ? 0 : 0);
+      // Flood and door stay until manually toggled.
+      pushReading("flood", cur.flood);
       pushReading("door", cur.door);
     }, 3000);
     return () => clearInterval(id);
