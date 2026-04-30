@@ -155,7 +155,7 @@ async function handlePhoto(msg: any, supa: any, tgApi: string, telegramToken: st
   try {
     content = await generateGeminiText({
       apiKey: geminiKey,
-      model: "gemini-2.5-flash",
+      model: ["gemini-2.5-flash", "gemini-2.0-flash"],
       system: "You are Guardian, a home security expert AI.",
       messages: [{
         role: "user",
@@ -229,7 +229,7 @@ async function handleText(supa: any, tgApi: string, geminiKey: string, chatId: n
   try {
     reply = await generateGeminiText({
       apiKey: geminiKey,
-      model: "gemini-2.5-flash",
+      model: ["gemini-2.5-flash", "gemini-2.0-flash"],
       system: `${SYSTEM_PROMPT}\n\nTELEGRAM CONTEXT JSON:\n${JSON.stringify(context, null, 2)}`,
       messages: [...trimmed, { role: "user", content: text }],
       temperature: 0.3,

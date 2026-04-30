@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
 
     const content = await generateGeminiText({
       apiKey: GEMINI_API_KEY,
-      model: "gemini-2.5-flash",
+      model: ["gemini-2.5-flash", "gemini-2.0-flash"],
       system: "You are Guardian, a home security expert AI.",
       messages,
       temperature: 0.3,

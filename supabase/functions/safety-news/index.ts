@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       try {
         summary = await generateGeminiText({
           apiKey: GEMINI_API_KEY,
-          model: "gemini-2.5-flash",
+          model: ["gemini-2.5-flash", "gemini-2.0-flash"],
           system: "You are Guardian, a home security AI.",
           messages: [
             { role: "user", content: `Headlines${location ? ` (user in ${location})` : ""}:\n${headlines}\n\nGive a 3-bullet summary of main threats and 2 specific things to check or do at home today. Use markdown bullets.` },

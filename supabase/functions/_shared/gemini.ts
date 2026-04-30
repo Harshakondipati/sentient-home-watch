@@ -9,7 +9,7 @@ export type GeminiMessage = {
 
 type GenerateOptions = {
   apiKey: string;
-  model: string;
+  model: string | string[];
   system?: string;
   messages: GeminiMessage[];
   temperature?: number;
@@ -41,29 +41,37 @@ export async function generateGeminiText({
     }];
   });
 
-  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
-    body: JSON.stringify({
-      ...(systemParts.length ? { systemInstruction: { parts: [{ text: systemParts.join("\n\n") }] } } : {}),
-      contents,
-      generationConfig: { temperature, topP, maxOutputTokens },
-    }),
-  });
+  const models = Array.isArray(model) ? model : [model];
+  let lastError: Error | null = null;
 
-  if (!resp.ok) {
+  for (const modelName of models) {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        ...(systemParts.length ? { systemInstruction: { parts: [{ text: systemParts.join("\n\n") }] } } : {}),
+        contents,
+        generationConfig: { temperature, topP, maxOutputTokens },
+      }),
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      return (data?.candidates?.[0]?.content?.parts ?? [])
+        .map((part: { text?: string }) => part.text ?? "")
+        .join("")
+        .trim();
+    }
+
     const detail = await resp.text();
-    throw new Error(`Gemini API error (${resp.status}): ${detail.slice(0, 300)}`);
+    lastError = new Error(`Gemini API error (${resp.status}) from ${modelName}: ${detail.slice(0, 300)}`);
+    if (!isRetryableGeminiStatus(resp.status)) break;
   }
 
-  const data = await resp.json();
-  return (data?.candidates?.[0]?.content?.parts ?? [])
-    .map((part: { text?: string }) => part.text ?? "")
-    .join("")
-    .trim();
+  throw lastError ?? new Error("Gemini API error: no model response");
 }
 
 function toGeminiParts(content: string | MessagePart[]) {
@@ -86,4 +94,8 @@ function parseDataUrl(dataUrl: string) {
   const match = dataUrl.match(/^data:([^;,]+);base64,(.+)$/);
   if (!match) throw new Error("Only base64 data URLs are supported for images");
   return { mimeType: match[1], data: match[2] };
+}
+
+function isRetryableGeminiStatus(status: number) {
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
 }

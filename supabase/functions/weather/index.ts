@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
       try {
         tip = await generateGeminiText({
           apiKey: GEMINI_API_KEY,
-          model: "gemini-2.5-flash-lite",
+          model: ["gemini-2.5-flash-lite", "gemini-2.0-flash"],
           system: "You are Guardian, a home security AI.",
           messages: [
             { role: "user", content: `Weather: ${weather.condition} (${weather.description}), ${weather.temp} C, wind ${weather.wind_speed} m/s in ${weather.city}. Give ONE concise home-security tip (max 2 sentences) tied to this weather.` },
