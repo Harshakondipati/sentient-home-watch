@@ -4,11 +4,11 @@ import { GuardianHeader } from "@/components/GuardianHeader";
 import { useSensorSimulation } from "@/hooks/useSensorSimulation";
 import { ChatTab } from "@/components/tabs/ChatTab";
 import { SensorsTab } from "@/components/tabs/SensorsTab";
-import { NewsTab } from "@/components/tabs/NewsTab";
 import { SettingsTab } from "@/components/tabs/SettingsTab";
 import { DashboardStrip } from "@/components/DashboardStrip";
 import { callFn } from "@/lib/api";
 import { useSettings } from "@/hooks/useSettings";
+import { loadSettings, saveSettings } from "@/lib/settings";
 
 interface Geo { city?: string; country?: string; lat?: number; lon?: number; }
 
