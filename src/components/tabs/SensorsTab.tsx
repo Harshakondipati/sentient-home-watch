@@ -26,30 +26,21 @@ export function SensorsTab({ readings, alerts, trigger }: Props) {
   const settings = useSettings();
   const sentRef = useRef<Set<string>>(new Set());
 
-  // Auto-fire Telegram alerts when new alerts come in (if configured).
+  // Index.tsx already pushes Telegram alerts — but this tab still tracks dedup so the test button
+  // doesn't compete. Auto-push lives in Index so it works regardless of which tab is active.
   useEffect(() => {
-    if (!settings.telegramBotToken || !settings.telegramChatId) return;
-    alerts.forEach((a) => {
-      if (sentRef.current.has(a.id)) return;
-      sentRef.current.add(a.id);
-      callFn("telegram-alert", {
-        botToken: settings.telegramBotToken,
-        chatId: settings.telegramChatId,
-        message: `🚨 <b>Guardian AI Alert</b>\nSensor: ${SENSOR_LABELS[a.sensor]}\nValue: ${a.value}\nThreat: ${a.level}\nTime: ${new Date(a.ts).toLocaleTimeString()}`,
-      }).catch(() => { /* silently ignore — error toast in test button */ });
-    });
-  }, [alerts, settings.telegramBotToken, settings.telegramChatId]);
+    alerts.forEach((a) => sentRef.current.add(a.id));
+  }, [alerts]);
 
   const testTelegram = async () => {
-    if (!settings.telegramBotToken || !settings.telegramChatId) {
-      toast.error("Add your Telegram bot token + chat ID in Settings first.");
+    if (!settings.telegramChatId) {
+      toast.error("Connect your Telegram in Settings first.");
       return;
     }
     try {
       await callFn("telegram-alert", {
-        botToken: settings.telegramBotToken,
         chatId: settings.telegramChatId,
-        message: "✅ <b>Guardian AI</b>\nTest message — your bot is correctly configured.",
+        message: "✅ <b>Guardian AI</b>\nTest alert — your Telegram is connected.",
       });
       toast.success("Telegram test sent!");
     } catch (e: any) { toast.error(`Telegram: ${e.message}`); }

@@ -14,7 +14,90 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      telegram_audits: {
+        Row: {
+          area: string | null
+          chat_id: number
+          created_at: string
+          findings: Json | null
+          id: string
+          risk_level: string | null
+          summary: string | null
+        }
+        Insert: {
+          area?: string | null
+          chat_id: number
+          created_at?: string
+          findings?: Json | null
+          id?: string
+          risk_level?: string | null
+          summary?: string | null
+        }
+        Update: {
+          area?: string | null
+          chat_id?: number
+          created_at?: string
+          findings?: Json | null
+          id?: string
+          risk_level?: string | null
+          summary?: string | null
+        }
+        Relationships: []
+      }
+      telegram_bot_state: {
+        Row: {
+          id: number
+          update_offset: number
+          updated_at: string
+        }
+        Insert: {
+          id: number
+          update_offset?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          update_offset?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      telegram_sessions: {
+        Row: {
+          chat_id: number
+          created_at: string
+          first_name: string | null
+          has_kids: boolean | null
+          has_pets: boolean | null
+          history: Json
+          location: string | null
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          chat_id: number
+          created_at?: string
+          first_name?: string | null
+          has_kids?: boolean | null
+          has_pets?: boolean | null
+          history?: Json
+          location?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          chat_id?: number
+          created_at?: string
+          first_name?: string | null
+          has_kids?: boolean | null
+          has_pets?: boolean | null
+          history?: Json
+          location?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
