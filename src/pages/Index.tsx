@@ -18,8 +18,10 @@ const Index = () => {
   const [weatherCondition, setWeatherCondition] = useState<string | undefined>();
   const settings = useSettings();
 
-  // Send Telegram alert when a sensor triggers (filtered by user notification prefs + quiet hours).
+  // Send Telegram alert when a sensor triggers (filtered by user prefs + presence + quiet hours).
   const handleAlert = (a: any) => {
+    // Suppress motion/door alerts when owner is home (they're moving around themselves).
+    if (settings.presence === "home" && (a.sensor === "motion" || a.sensor === "door")) return;
     if (!settings.telegramChatId) return;
     const lvl = (a.level || "").toLowerCase() as "low" | "medium" | "high";
     if (!settings.notifyLevels[lvl]) return;
