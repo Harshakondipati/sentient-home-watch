@@ -73,11 +73,11 @@ export function SensorsTab({ readings, alerts, trigger }: Props) {
                 <div className={`h-2.5 w-2.5 rounded-full ${danger ? "bg-danger animate-blink" : "bg-safe glow-safe"}`} />
               </div>
               <div className={`font-mono text-3xl font-bold ${danger ? "text-danger" : ""}`}>
-                {isBinary ? (last >= 1 ? "ACTIVE" : "CLEAR") : last.toFixed(k === "temperature" ? 1 : 0)}
+                {formatSensorValue(k, last)}
                 {!isBinary && <span className="text-base text-muted-foreground ml-1">{SENSOR_UNITS[k]}</span>}
               </div>
               <div className="mt-3 h-12">
-                <Sparkline data={arr.slice(-20)} color={danger ? "hsl(var(--danger))" : "hsl(var(--primary))"} />
+                <Sparkline data={arr.slice(-20)} color={danger ? "hsl(var(--danger))" : "hsl(var(--primary))"} domain={sparklineDomain(k)} />
               </div>
             </Card>
           );
@@ -129,4 +129,18 @@ export function SensorsTab({ readings, alerts, trigger }: Props) {
       </Card>
     </div>
   );
+}
+
+function formatSensorValue(sensor: SensorKey, value: number) {
+  if (sensor === "flood") return value >= 1 ? "FLOOD ALERT" : "NO ALERT";
+  if (sensor === "motion") return value >= 1 ? "MOTION" : "IDLE";
+  if (sensor === "door") return value >= 1 ? "OPEN" : "CLOSED";
+  return value.toFixed(sensor === "temperature" ? 1 : 0);
+}
+
+function sparklineDomain(sensor: SensorKey): [number, number] {
+  if (sensor === "temperature") return [0, 50];
+  if (sensor === "smoke") return [0, 100];
+  if (sensor === "co") return [0, 60];
+  return [0, 1];
 }

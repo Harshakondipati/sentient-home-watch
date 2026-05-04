@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 // useSensorSimulation
 // -------------------
-// Simulates 6 home sensors with small random fluctuations every 3 seconds.
+// Simulates 6 home sensors with realistic baseline stability every 3 seconds.
 // Detects threshold crossings and produces alerts. The hook also exposes
 // trigger functions ("simulate motion", etc.) used by the Sensors tab.
 
@@ -126,14 +126,14 @@ export function useSensorSimulation(onThreshold?: (alert: SensorAlert) => void) 
     }
   };
 
-  // Auto-tick every 3s with small fluctuations
+  // Auto-tick every 3s. Normal readings stay stable; triggered values recover slowly.
   useEffect(() => {
     const id = setInterval(() => {
       const cur = lastValuesRef.current;
-      // Temp drifts toward 22°C; gases drift down toward baseline so triggered spikes recover.
-      pushReading("temperature", clamp(cur.temperature + (22 - cur.temperature) * 0.1 + rand(-0.3, 0.3), -5, 50));
-      pushReading("smoke", clamp(cur.smoke * 0.85 + rand(-1, 1), 0, 100));
-      pushReading("co", clamp(cur.co * 0.85 + rand(-0.5, 0.5), 0, 60));
+      // Temperature and gas values remain flat at baseline and recover slowly after simulated spikes.
+      pushReading("temperature", nextTemperature(cur.temperature));
+      pushReading("smoke", recoverToBaseline(cur.smoke, 5, 6, 0));
+      pushReading("co", recoverToBaseline(cur.co, 2, 4, 0));
       // Motion auto-clears after one tick; no random firing.
       pushReading("motion", cur.motion > 0 ? 0 : 0);
       // Flood and door stay until manually toggled.
@@ -168,5 +168,16 @@ export function useSensorSimulation(onThreshold?: (alert: SensorAlert) => void) 
   return { readings, alerts, threat, trigger, clearAlerts };
 }
 
-function rand(a: number, b: number) { return a + Math.random() * (b - a); }
 function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
+
+function nextTemperature(current: number) {
+  if (Math.abs(current - 22) < 0.1) return 22;
+  const step = current > 22 ? -0.2 : 0.2;
+  return Number(clamp(current + step, -5, 50).toFixed(1));
+}
+
+function recoverToBaseline(current: number, baseline: number, step: number, decimals: number) {
+  if (Math.abs(current - baseline) <= step) return baseline;
+  const next = current > baseline ? current - step : current + step;
+  return Number(clamp(next, 0, 100).toFixed(decimals));
+}

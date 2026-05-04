@@ -45,11 +45,11 @@ export function DashboardStrip({ readings, alerts, threat }: Props) {
               </div>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">{SENSOR_LABELS[k]}</div>
               <div className={`font-mono text-lg font-bold ${danger ? "text-danger" : ""}`}>
-                {isBinary ? (last >= 1 ? "ON" : "OK") : last.toFixed(k === "temperature" ? 1 : 0)}
+                {formatSensorValue(k, last)}
                 {!isBinary && <span className="text-[10px] text-muted-foreground ml-1">{SENSOR_UNITS[k]}</span>}
               </div>
               <div className="h-6 mt-1">
-                <Sparkline data={arr.slice(-15)} color={danger ? "hsl(var(--danger))" : "hsl(var(--primary))"} />
+                <Sparkline data={arr.slice(-15)} color={danger ? "hsl(var(--danger))" : "hsl(var(--primary))"} domain={sparklineDomain(k)} />
               </div>
             </Card>
           );
@@ -72,4 +72,18 @@ export function DashboardStrip({ readings, alerts, threat }: Props) {
       )}
     </div>
   );
+}
+
+function formatSensorValue(sensor: SensorKey, value: number) {
+  if (sensor === "flood") return value >= 1 ? "FLOOD ALERT" : "NO ALERT";
+  if (sensor === "motion") return value >= 1 ? "MOTION" : "IDLE";
+  if (sensor === "door") return value >= 1 ? "OPEN" : "CLOSED";
+  return value.toFixed(sensor === "temperature" ? 1 : 0);
+}
+
+function sparklineDomain(sensor: SensorKey): [number, number] {
+  if (sensor === "temperature") return [0, 50];
+  if (sensor === "smoke") return [0, 100];
+  if (sensor === "co") return [0, 60];
+  return [0, 1];
 }
