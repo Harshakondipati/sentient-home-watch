@@ -23,11 +23,13 @@ Deno.serve(async (req) => {
 
   try {
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
+    if (!GEMINI_API_KEY) {
+      return json({ content: "Guardian AI is not configured with a Gemini API key yet, so I cannot generate a live AI response. Sensor readings, alerts, and photo context are still available in the app." });
+    }
 
     const { messages, location, homeContext, temperature = 0.3, topP = 0.85 } = await req.json();
     if (!Array.isArray(messages)) {
-      return json({ error: "messages must be an array" }, 400);
+      return json({ content: "I could not read the chat message format. Please send the message again." });
     }
 
     const baseSystem = location
@@ -50,7 +52,11 @@ Deno.serve(async (req) => {
     return json({ content });
   } catch (e) {
     console.error("guardian-chat error:", e);
-    return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
+    const message = e instanceof Error ? e.message : "Unknown error";
+    if (message.includes("Gemini API error")) {
+      return json({ content: buildProviderUnavailableReply(message) });
+    }
+    return json({ content: "Guardian could not complete that response because the backend returned an unexpected error. Please try again in a moment." });
   }
 });
 
@@ -59,4 +65,14 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function buildProviderUnavailableReply(message: string) {
+  if (message.includes("(429)")) {
+    return "Guardian received your message, but the configured Gemini API key is currently quota or rate limited. Check the Gemini quota/billing for the key, then try again.";
+  }
+  if (message.includes("(503)")) {
+    return "Guardian received your message, but Gemini is temporarily under high demand. Try again shortly.";
+  }
+  return "Guardian received your message, but the AI provider returned an error. Try again shortly, or check the configured Gemini key.";
 }
