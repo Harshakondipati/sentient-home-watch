@@ -18,8 +18,8 @@ Deno.serve(async (req) => {
     const r = await fetch(url);
     const data = await r.json();
     if (data.status !== "success") {
-      return new Response(JSON.stringify({ error: data.message ?? "geolocation failed" }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({ unavailable: true, reason: data.message ?? "geolocation failed" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     return new Response(JSON.stringify({
@@ -33,8 +33,11 @@ Deno.serve(async (req) => {
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("geolocate error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({
+      unavailable: true,
+      reason: e instanceof Error ? e.message : "Unknown error",
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
