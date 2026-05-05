@@ -20,7 +20,14 @@ Return STRICT JSON ONLY with this exact shape, no markdown and no fences:
   "priority_actions": ["highest priority action", "..."],
   "follow_up_checks": ["what the user should inspect manually because it is not visible", "..."],
   "confidence": "Low" | "Medium" | "High"
-}`;
+}
+
+Keep the response compact:
+- visible_observations: max 5 items
+- positive_signals: max 4 items
+- findings: max 4 items
+- priority_actions: max 4 items
+- follow_up_checks: max 4 items`;
 
 const ROOM_MEMORY_PROMPT = `Analyze this room image so Guardian can remember the house layout for future home-safety decisions.
 
@@ -158,16 +165,7 @@ function parseAudit(content: string) {
     }
   }
 
-  return normalizeAudit({
-    risk_level: inferRiskLevel(cleaned),
-    summary: cleaned.replace(/\s+/g, " ").slice(0, 600),
-    visible_observations: [],
-    positive_signals: [],
-    findings: [],
-    priority_actions: ["Review the image manually; the AI response could not be parsed into a structured audit."],
-    follow_up_checks: ["Check door/window lock status, electrical outlets, smoke/CO detector placement, and escape path clearance."],
-    confidence: "Low",
-  });
+  return parsePartialAudit(cleaned);
 }
 
 function parseRoomMemory(content: string) {
@@ -234,6 +232,19 @@ function normalizeAudit(raw: any) {
   };
 }
 
+function parsePartialAudit(content: string) {
+  return normalizeAudit({
+    risk_level: extractStringField(content, "risk_level"),
+    summary: extractStringField(content, "summary") || "Audit completed, but the structured response was only partially recovered.",
+    visible_observations: extractArrayField(content, "visible_observations"),
+    positive_signals: extractArrayField(content, "positive_signals"),
+    findings: extractFindings(content),
+    priority_actions: extractArrayField(content, "priority_actions"),
+    follow_up_checks: extractArrayField(content, "follow_up_checks"),
+    confidence: extractStringField(content, "confidence"),
+  });
+}
+
 function stripMarkdownFence(value: string) {
   return value
     .trim()
@@ -255,6 +266,37 @@ function extractJsonObject(value: string) {
   const start = value.indexOf("{");
   const end = value.lastIndexOf("}");
   return start >= 0 && end > start ? value.slice(start, end + 1) : "";
+}
+
+function extractStringField(value: string, field: string) {
+  const match = value.match(new RegExp(`"${field}"\\s*:\\s*"([^"]*)"`));
+  return match?.[1] ?? "";
+}
+
+function extractArrayField(value: string, field: string) {
+  const startMatch = value.match(new RegExp(`"${field}"\\s*:\\s*\\[`));
+  if (!startMatch?.index && startMatch?.index !== 0) return [];
+  const start = startMatch.index + startMatch[0].length;
+  const end = value.indexOf("]", start);
+  const slice = end >= 0 ? value.slice(start, end) : value.slice(start);
+  return [...slice.matchAll(/"([^"]+)"/g)].map((match) => match[1]).slice(0, 6);
+}
+
+function extractFindings(value: string) {
+  const findingsStart = value.match(/"findings"\s*:\s*\[/);
+  if (!findingsStart?.index && findingsStart?.index !== 0) return [];
+  const start = findingsStart.index + findingsStart[0].length;
+  const end = value.indexOf("]", start);
+  const slice = end >= 0 ? value.slice(start, end) : value.slice(start);
+  const objectMatches = slice.match(/\{[\s\S]*?\}/g) ?? [];
+
+  return objectMatches.slice(0, 4).map((chunk) => ({
+    area: extractStringField(chunk, "area") || "General",
+    issue: extractStringField(chunk, "issue") || "Potential safety concern",
+    severity: extractStringField(chunk, "severity") || "Medium",
+    recommendation: extractStringField(chunk, "recommendation") || "Inspect this area more closely.",
+    why_it_matters: extractStringField(chunk, "why_it_matters") || "This may affect home safety or emergency readiness.",
+  }));
 }
 
 function toStringArray(value: unknown) {
