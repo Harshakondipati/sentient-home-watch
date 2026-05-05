@@ -22,27 +22,73 @@ Return STRICT JSON ONLY with this exact shape, no markdown and no fences:
   "confidence": "Low" | "Medium" | "High"
 }`;
 
+const ROOM_MEMORY_PROMPT = `Analyze this room image so Guardian can remember the house layout for future home-safety decisions.
+
+Return STRICT JSON ONLY with this exact shape:
+{
+  "summary": "2-3 sentence summary of the room and what stands out",
+  "observed_features": ["major furniture, appliances, windows, doors, stairs, valuables, pet areas, etc"],
+  "entry_points": ["doors, windows, balcony access, garage access, or empty if none visible"],
+  "typical_risks": ["likely safety or security concerns to monitor in this room over time"],
+  "person_visible": true | false,
+  "confidence": "Low" | "Medium" | "High"
+}`;
+
+const MOTION_DEMO_PROMPT = `You are comparing two images from the same house for a motion-detection demo.
+
+Image 1 is the saved baseline room photo.
+Image 2 is the current room photo.
+
+Return STRICT JSON ONLY with this exact shape:
+{
+  "room_match": true | false,
+  "person_detected": true | false,
+  "should_alert": true | false,
+  "summary": "2-3 sentence explanation of what changed",
+  "evidence": ["clear visual reason 1", "clear visual reason 2"],
+  "recommended_action": "one concise action",
+  "confidence": "Low" | "Medium" | "High"
+}
+
+Set should_alert to true only if the current image appears to show a person or meaningful motion-related occupancy change in the same room.`;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  let requestedMode = "audit";
   try {
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
 
-    const { imageDataUrl, followUp, history } = await req.json();
+    const {
+      imageDataUrl,
+      followUp,
+      history,
+      analysisMode,
+      referenceImageDataUrl,
+      roomName,
+      roomTags,
+      roomNotes,
+    } = await req.json();
     if (!imageDataUrl || typeof imageDataUrl !== "string") {
       return json({ error: "imageDataUrl required" }, 400);
     }
 
-    const userContent = followUp
-      ? [
-          { type: "text" as const, text: followUp },
-          { type: "image_url" as const, image_url: { url: imageDataUrl } },
-        ]
-      : [
-          { type: "text" as const, text: VISION_PROMPT },
-          { type: "image_url" as const, image_url: { url: imageDataUrl } },
-        ];
+    const mode = analysisMode === "motion_demo" || analysisMode === "room_memory" ? analysisMode : "audit";
+    requestedMode = mode;
+    if (mode === "motion_demo" && (!referenceImageDataUrl || typeof referenceImageDataUrl !== "string")) {
+      return json({ error: "referenceImageDataUrl required for motion_demo" }, 400);
+    }
+
+    const userContent = buildUserContent({
+      mode,
+      followUp,
+      imageDataUrl,
+      referenceImageDataUrl,
+      roomName,
+      roomTags,
+      roomNotes,
+    });
 
     const messages: GeminiMessage[] = [
       ...(Array.isArray(history) ? history.slice(-6) : []),
@@ -59,6 +105,14 @@ Deno.serve(async (req) => {
       maxOutputTokens: 1500,
     });
 
+    if (mode === "motion_demo") {
+      return json({ motionDemo: parseMotionDemo(content), raw: content });
+    }
+
+    if (mode === "room_memory") {
+      return json({ roomMemory: parseRoomMemory(content), raw: content });
+    }
+
     if (followUp) return json({ content });
 
     const audit = parseAudit(content);
@@ -68,6 +122,12 @@ Deno.serve(async (req) => {
     console.error("guardian-vision error:", e);
     const message = e instanceof Error ? e.message : "Unknown error";
     if (message.includes("Gemini API error")) {
+      if (requestedMode === "motion_demo") {
+        return json({ motionDemo: buildProviderUnavailableMotion(message), raw: "" });
+      }
+      if (requestedMode === "room_memory") {
+        return json({ roomMemory: buildProviderUnavailableRoomMemory(message), raw: "" });
+      }
       return json({ audit: buildProviderUnavailableAudit(message), raw: "" });
     }
     return json({ error: message }, 500);
@@ -108,6 +168,50 @@ function parseAudit(content: string) {
     follow_up_checks: ["Check door/window lock status, electrical outlets, smoke/CO detector placement, and escape path clearance."],
     confidence: "Low",
   });
+}
+
+function parseRoomMemory(content: string) {
+  const parsed = parseStructuredContent(content);
+  return {
+    summary: typeof parsed?.summary === "string" ? parsed.summary : "Room saved for future context, but the AI summary could not be fully parsed.",
+    observed_features: toStringArray(parsed?.observed_features),
+    entry_points: toStringArray(parsed?.entry_points),
+    typical_risks: toStringArray(parsed?.typical_risks),
+    person_visible: toBoolean(parsed?.person_visible),
+    confidence: normalizeConfidence(parsed?.confidence),
+  };
+}
+
+function parseMotionDemo(content: string) {
+  const parsed = parseStructuredContent(content);
+  return {
+    room_match: toBoolean(parsed?.room_match),
+    person_detected: toBoolean(parsed?.person_detected),
+    should_alert: toBoolean(parsed?.should_alert),
+    summary: typeof parsed?.summary === "string" ? parsed.summary : "Motion demo completed, but the AI explanation could not be fully parsed.",
+    evidence: toStringArray(parsed?.evidence),
+    recommended_action: typeof parsed?.recommended_action === "string" ? parsed.recommended_action : "Review the room feed and verify whether motion is expected.",
+    confidence: normalizeConfidence(parsed?.confidence),
+  };
+}
+
+function parseStructuredContent(content: string) {
+  const cleaned = stripMarkdownFence(content);
+  const candidates = [
+    cleaned,
+    extractJsonObject(cleaned),
+    stripMarkdownFence(unquoteJsonString(cleaned)),
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Try next representation.
+    }
+  }
+
+  return {};
 }
 
 function normalizeAudit(raw: any) {
@@ -176,6 +280,74 @@ function inferRiskLevel(value: string) {
   return normalizeRisk(match?.[1]);
 }
 
+function toBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "yes";
+  }
+  return false;
+}
+
+function buildUserContent({
+  mode,
+  followUp,
+  imageDataUrl,
+  referenceImageDataUrl,
+  roomName,
+  roomTags,
+  roomNotes,
+}: {
+  mode: "audit" | "room_memory" | "motion_demo";
+  followUp?: string;
+  imageDataUrl: string;
+  referenceImageDataUrl?: string;
+  roomName?: string;
+  roomTags?: string[];
+  roomNotes?: string;
+}) {
+  if (mode === "motion_demo") {
+    return [
+      {
+        type: "text" as const,
+        text: [
+          MOTION_DEMO_PROMPT,
+          roomName ? `Room label: ${roomName}` : "",
+          Array.isArray(roomTags) && roomTags.length ? `Room tags: ${roomTags.join(", ")}` : "",
+          roomNotes ? `Room notes: ${roomNotes}` : "",
+        ].filter(Boolean).join("\n"),
+      },
+      { type: "image_url" as const, image_url: { url: referenceImageDataUrl! } },
+      { type: "image_url" as const, image_url: { url: imageDataUrl } },
+    ];
+  }
+
+  if (mode === "room_memory") {
+    return [
+      {
+        type: "text" as const,
+        text: [
+          ROOM_MEMORY_PROMPT,
+          roomName ? `Room label: ${roomName}` : "",
+          Array.isArray(roomTags) && roomTags.length ? `Room tags: ${roomTags.join(", ")}` : "",
+          roomNotes ? `Room notes from user: ${roomNotes}` : "",
+        ].filter(Boolean).join("\n"),
+      },
+      { type: "image_url" as const, image_url: { url: imageDataUrl } },
+    ];
+  }
+
+  return followUp
+    ? [
+        { type: "text" as const, text: followUp },
+        { type: "image_url" as const, image_url: { url: imageDataUrl } },
+      ]
+    : [
+        { type: "text" as const, text: VISION_PROMPT },
+        { type: "image_url" as const, image_url: { url: imageDataUrl } },
+      ];
+}
+
 function buildProviderUnavailableAudit(message: string) {
   const isQuota = message.includes("(429)");
   const isUnavailable = message.includes("(503)");
@@ -220,4 +392,35 @@ function buildProviderUnavailableAudit(message: string) {
     ],
     confidence: "Low",
   });
+}
+
+function buildProviderUnavailableRoomMemory(message: string) {
+  const summary = message.includes("(429)")
+    ? "The room image upload worked, but Gemini quota is currently exhausted, so Guardian could not generate a room-memory summary."
+    : "The room image upload worked, but the AI provider was unavailable, so Guardian could not generate a room-memory summary.";
+
+  return {
+    summary,
+    observed_features: [],
+    entry_points: [],
+    typical_risks: [],
+    person_visible: false,
+    confidence: "Low",
+  };
+}
+
+function buildProviderUnavailableMotion(message: string) {
+  const summary = message.includes("(429)")
+    ? "The motion demo request reached Guardian, but the configured Gemini key is currently quota limited."
+    : "The motion demo request reached Guardian, but the AI provider was temporarily unavailable.";
+
+  return {
+    room_match: false,
+    person_detected: false,
+    should_alert: false,
+    summary,
+    evidence: ["No vision comparison result was available from the AI provider."],
+    recommended_action: "Retry the motion demo after the Gemini key is available.",
+    confidence: "Low",
+  };
 }

@@ -9,6 +9,7 @@ import ReactMarkdown from "react-markdown";
 import { useSettings } from "@/hooks/useSettings";
 import { SENSOR_LABELS, SENSOR_UNITS, type SensorAlert, type SensorKey, type SensorState } from "@/hooks/useSensorSimulation";
 import type { ThreatLevel } from "@/lib/threat";
+import { loadHouseMemory, loadStoredChatHistory, saveStoredChatHistory, clearStoredChatHistory, type StoredChatMessage } from "@/lib/guardianMemory";
 
 type ImageAttachment = { dataUrl: string; name: string };
 type Msg = {
@@ -55,12 +56,16 @@ interface Props {
 
 export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondition, presence, readings, alerts, threat }: Props) {
   const settings = useSettings();
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const [messages, setMessages] = useState<Msg[]>(() => loadStoredChatHistory().map(toUiMessage));
   const [input, setInput] = useState("");
   const [pendingImage, setPendingImage] = useState<ImageAttachment | null>(null);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    saveStoredChatHistory(messages.map(toStoredMessage));
+  }, [messages]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -142,7 +147,15 @@ export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondi
           <Shield className="h-5 w-5 text-primary" />
           <span className="font-mono tracking-wider text-sm">GUARDIAN CHAT</span>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setMessages([])} disabled={messages.length === 0}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            clearStoredChatHistory();
+            setMessages([]);
+          }}
+          disabled={messages.length === 0}
+        >
           <Trash2 className="h-4 w-4 mr-1" /> Clear
         </Button>
       </div>
@@ -310,6 +323,7 @@ function buildHomeContext({
   threat: ThreatLevel;
   messages: Msg[];
 }) {
+  const houseMemory = loadHouseMemory();
   const sensorSnapshot = (Object.keys(SENSOR_LABELS) as SensorKey[]).map((key) => {
     const history = readings[key] ?? [];
     const last = history[history.length - 1];
@@ -347,5 +361,54 @@ function buildHomeContext({
       .filter((message) => message.role === "assistant" && message.content.includes("Photo Audit"))
       .slice(-3)
       .map((message) => message.content),
+    conversationMemory: {
+      recentTranscript: messages.slice(-20).map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+      priorUserUpdates: messages
+        .filter((message) => message.role === "user")
+        .slice(-8)
+        .map((message) => message.content),
+      previousAssistantGuidance: messages
+        .filter((message) => message.role === "assistant")
+        .slice(-8)
+        .map((message) => message.content),
+    },
+    houseKnowledge: houseMemory.rooms.map((room) => ({
+      roomName: room.roomName,
+      tags: room.tags,
+      notes: room.notes,
+      aiSummary: room.aiSummary ?? null,
+      observedFeatures: room.observedFeatures ?? [],
+      entryPoints: room.entryPoints ?? [],
+      typicalRisks: room.typicalRisks ?? [],
+      savedAt: new Date(room.updatedAt).toISOString(),
+    })),
+    recentMotionDemoEvents: houseMemory.motionEvents.slice(0, 6).map((event) => ({
+      roomName: event.roomName,
+      personDetected: event.personDetected,
+      shouldAlert: event.shouldAlert,
+      roomMatch: event.roomMatch,
+      confidence: event.confidence,
+      summary: event.summary,
+      time: new Date(event.createdAt).toISOString(),
+    })),
+  };
+}
+
+function toStoredMessage(message: Msg): StoredChatMessage {
+  return {
+    role: message.role,
+    content: message.content,
+    ts: Date.now(),
+    attachmentLabel: message.image ? "image" : null,
+  };
+}
+
+function toUiMessage(message: StoredChatMessage): Msg {
+  return {
+    role: message.role,
+    content: message.content,
   };
 }

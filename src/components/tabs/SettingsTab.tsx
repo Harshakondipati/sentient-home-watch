@@ -8,6 +8,7 @@ import { RotateCcw, Save, Send, MessageCircle, Trash2, ExternalLink, Home, LogOu
 import { loadSettings, saveSettings, GuardianSettings, TELEGRAM_BOT_USERNAME } from "@/lib/settings";
 import { toast } from "sonner";
 import { callFn } from "@/lib/api";
+import { clearHouseMemory, clearStoredChatHistory } from "@/lib/guardianMemory";
 
 export function SettingsTab() {
   const [s, setS] = useState<GuardianSettings>(loadSettings());
@@ -27,8 +28,13 @@ export function SettingsTab() {
   };
 
   const clearChatHistory = () => {
-    // Chat is in-memory; this just confirms user intent. Future: clear localStorage if persisted.
-    toast.success("Chat history cleared on next refresh.");
+    clearStoredChatHistory();
+    toast.success("Chat history cleared.");
+  };
+
+  const clearSavedRooms = () => {
+    clearHouseMemory();
+    toast.success("Saved room library cleared.");
   };
 
   const testTelegram = async () => {
@@ -205,6 +211,9 @@ export function SettingsTab() {
         <div className="border-t pt-4">
           <Button variant="outline" size="sm" onClick={clearChatHistory}>
             <Trash2 className="h-4 w-4 mr-2" /> Clear chat history
+          </Button>
+          <Button variant="outline" size="sm" className="ml-2" onClick={clearSavedRooms}>
+            <Trash2 className="h-4 w-4 mr-2" /> Clear saved rooms
           </Button>
           <p className="text-xs text-muted-foreground mt-2">Your photos and chat are never stored on a server — they live only in this browser.</p>
         </div>
