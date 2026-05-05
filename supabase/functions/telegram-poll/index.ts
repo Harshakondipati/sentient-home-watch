@@ -36,6 +36,19 @@ Deno.serve(async (req) => {
   const supa = createClient(SUPABASE_URL, SERVICE_KEY);
   const tgApi = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 
+  const maybeUpdate = await readTelegramWebhookUpdate(req);
+  if (maybeUpdate) {
+    try {
+      await handleUpdate(maybeUpdate, supa, tgApi, TELEGRAM_BOT_TOKEN, GEMINI_API_KEY);
+      const newOffset = maybeUpdate.update_id + 1;
+      await bumpOffset(supa, newOffset);
+      return json({ ok: true, mode: "webhook", processed: 1, offset: newOffset });
+    } catch (e) {
+      console.error("webhook update failed:", e);
+      return json({ error: e instanceof Error ? e.message : "Webhook update failed" }, 500);
+    }
+  }
+
   const { data: state, error: stateErr } = await supa
     .from("telegram_bot_state")
     .select("update_offset")
@@ -77,14 +90,35 @@ Deno.serve(async (req) => {
 
     processed += updates.length;
     const newOffset = Math.max(...updates.map((u) => u.update_id)) + 1;
-    await supa.from("telegram_bot_state")
-      .update({ update_offset: newOffset, updated_at: new Date().toISOString() })
-      .eq("id", 1);
+    await bumpOffset(supa, newOffset);
     currentOffset = newOffset;
   }
 
   return json({ ok: true, processed, offset: currentOffset });
 });
+
+async function readTelegramWebhookUpdate(req: Request) {
+  const contentType = req.headers.get("content-type") || "";
+  if (!contentType.toLowerCase().includes("application/json")) return null;
+
+  try {
+    const body = await req.clone().json();
+    if (body && typeof body === "object" && "update_id" in body && "message" in body) {
+      return body as any;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+async function bumpOffset(supa: any, updateOffset: number) {
+  await supa
+    .from("telegram_bot_state")
+    .update({ update_offset: updateOffset, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+}
 
 async function handleUpdate(update: any, supa: any, tgApi: string, telegramToken: string, geminiKey: string) {
   const msg = update.message;
