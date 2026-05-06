@@ -63,4 +63,9 @@ describe("threat presentation helpers", () => {
     expect(severityClass("low")).toContain("text-safe");
     expect(severityClass("")).toContain("text-safe");
   });
+
+  it("returns safe class for null and undefined", () => {
+    expect(severityClass(null)).toContain("text-safe");
+    expect(severityClass(undefined)).toContain("text-safe");
+  });
 });
