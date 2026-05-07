@@ -153,10 +153,11 @@ export function ChatTab({ presetPrompt, onPresetConsumed, location, weatherCondi
           onClick={() => {
             clearStoredChatHistory();
             setMessages([]);
+            toast.success("Chat cleared.");
           }}
           disabled={messages.length === 0}
         >
-          <Trash2 className="h-4 w-4 mr-1" /> Clear
+          <Trash2 className="h-4 w-4 mr-1" /> Clear chat
         </Button>
       </div>
 
