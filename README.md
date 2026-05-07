@@ -1,4 +1,4 @@
-# Guardian AI — Sentient Home Watch
+# Guardian AI  —  Sentient Home Watch
 
 Guardian AI is a smart home security assistant that combines a React dashboard, simulated home sensors, Gemini-powered safety reasoning, photo-based room audits, and Telegram alerts. It was built as a college AI essentials project, but the code is structured like a real prototype: frontend state stays private in the browser, AI calls run through Supabase Edge Functions, and Telegram integration is handled server-side so bot secrets never reach the client.
 
